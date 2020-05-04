@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"sort"
 	"strconv"
 )
 
@@ -31,68 +30,22 @@ type User struct {
 func getAll() []User {
 	users := []User{}
 
-	usersIdChan := make(chan int)
+	for _, id := range usersRepo {
+		req, _ := http.NewRequest("GET", "http://users-service:8090/user", nil)
 
-	go func() {
-		for _, u := range usersRepo {
-			usersIdChan <- u
-		}
-		close(usersIdChan)
-	}()
+		q := req.URL.Query()
+		q.Add("userId", strconv.Itoa(id))
+		req.URL.RawQuery = q.Encode()
 
-	workers := make([]<-chan User, 2)
+		client := http.Client{}
+		resp, _ := client.Do(req)
 
-	workers = append(workers, getUserDetail(usersIdChan))
-	workers = append(workers, getUserDetail(usersIdChan))
+		body, _ := ioutil.ReadAll(resp.Body)
 
-	endUserChan := make(chan User)
-
-	for _, chanU := range workers {
-		go func(chanU <-chan User, endUserChan chan User) {
-			for u := range chanU {
-				endUserChan <- u
-			}
-		}(chanU, endUserChan)
+		user := User{}
+		json.Unmarshal(body, &user)
+		users = append(users, user)
 	}
-
-	for x := 0; x < len(usersRepo); x++ {
-		users = append(users, <-endUserChan)
-	}
-
-	sort.Slice(users, func(i, j int) bool {
-		return users[i].Id < users[j].Id
-	})
 
 	return users
-}
-
-func getUserDetail(usersChan chan int) <-chan User {
-
-	userDetailChan := make(chan User)
-
-	for userId := range usersChan {
-
-		go func(userId int) {
-
-			req, _ := http.NewRequest("GET", "http://users-service:8090/user", nil)
-
-			q := req.URL.Query()
-			q.Add("userId", strconv.Itoa(userId))
-			req.URL.RawQuery = q.Encode()
-
-			client := http.Client{}
-			resp, _ := client.Do(req)
-
-			body, _ := ioutil.ReadAll(resp.Body)
-
-			user := User{}
-			json.Unmarshal(body, &user)
-
-			userDetailChan <- user
-		}(userId)
-
-	}
-
-	return userDetailChan
-
 }
