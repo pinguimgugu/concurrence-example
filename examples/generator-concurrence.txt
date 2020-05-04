@@ -1,0 +1,91 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"sort"
+	"strconv"
+	"sync"
+)
+
+func main() {
+
+	http.HandleFunc("/proxy/users/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(getAll())
+	})
+
+	fmt.Println("Starting web server.")
+
+	http.ListenAndServe(":8070", nil)
+}
+
+type User struct {
+	Id   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+func getAll() []User {
+	users := []User{}
+
+	userChan := make(chan User)
+
+	var sg sync.WaitGroup
+
+	for _, id := range getUsersId() {
+		sg.Add(1)
+
+		go func(id int) {
+
+			req, _ := http.NewRequest("GET", "http://users-service:8090/user", nil)
+
+			q := req.URL.Query()
+			q.Add("userId", strconv.Itoa(id))
+			req.URL.RawQuery = q.Encode()
+
+			client := http.Client{}
+			resp, _ := client.Do(req)
+
+			body, _ := ioutil.ReadAll(resp.Body)
+
+			user := User{}
+			json.Unmarshal(body, &user)
+
+			userChan <- user
+
+			sg.Done()
+		}(id)
+	}
+
+	go func() {
+		sg.Wait()
+		close(userChan)
+	}()
+
+	for u := range userChan {
+		users = append(users, u)
+	}
+
+	sort.Slice(users, func(i, j int) bool {
+		return users[i].Id < users[j].Id
+	})
+
+	return users
+}
+
+func getUsersId() []int {
+	return []int{
+		1,
+		2,
+		3,
+		4,
+		5,
+		6,
+		7,
+		8,
+		9,
+		10,
+	}
+}
