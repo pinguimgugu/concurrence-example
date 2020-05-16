@@ -1,6 +1,6 @@
 
    Go by example:
-      - The principal goal here is show some aproach how concurrence standards can help you to make your application more faster to fetch data in another rest api 
+      - The principal goal here is show some aproach how concurrence standards can help you to make your application more faster to fetch data in another api 
 
 
 Before everything make sure run: ```docker-compose up -d users-service && docker-compose up dev```
